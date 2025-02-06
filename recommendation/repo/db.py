@@ -1,5 +1,5 @@
 from pymongo import MongoClient
-import app.config as config
+import recommendation.config as config
 
 class Database:
     _client = None
