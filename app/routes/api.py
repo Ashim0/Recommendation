@@ -21,18 +21,19 @@ def recommend():
         # Get recommended product IDs
         recommended_product_ids = get_recommendations(user_id)
 
-        print(f"Recommendations for user {user_id}: {recommended_product_ids}")
+        # print(f"Recommendations for user {user_id}: {recommended_product_ids}")
 
         if not recommended_product_ids:
             return jsonify({"userId": user_id, "recommendations": []})  # No recommendations
 
         # Fetch recommended product details from the database
         products_col = Database.get_collection("products")
+       
         recommended_products = list(products_col.find(
             {"_id": {"$in": recommended_product_ids}},  # Keep IDs as strings
-            {"_id": 1, "name": 1, "price": 1}
+            {"_id": 1, "name": 1, "price": 1,"images": 1}
         ))
-
+        print(f"Recommendation_product: {recommended_products} ")
         # Serialize MongoDB documents
         recommended_products = [serialize_mongo_doc(product) for product in recommended_products]
 

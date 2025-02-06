@@ -8,6 +8,8 @@ from pymongo.change_stream import ChangeStream
 from sklearn.metrics.pairwise import cosine_similarity
 from app.db import Database
 
+
+
 # Global variables for caching
 user_product_matrix = None
 df = None
