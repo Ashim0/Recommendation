@@ -7,4 +7,5 @@ if __name__ == '__main__':
     recommendations = recommendation_service.get_recommendations("1")
     print(recommendations)
 
-    recommendation_service.evaluate_recommendations()
+    # Plot the user-product matrix
+    recommendation_service.plot_user_product_matrix()

@@ -3,8 +3,8 @@ from setuptools import setup, find_packages
 setup(
     name='recommendation',
     version='1.0.0',
-    author='Ashim',
-    author_email='ashim@gmail.com',
+    author='Ashim Dongol',
+    author_email='dongolashim10@gmail.com',
     description='',
     long_description=open('README.md').read(),
     long_description_content_type='text/markdown',

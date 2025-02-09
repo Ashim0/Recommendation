@@ -1,99 +1,77 @@
 import logging
-
 import pandas as pd
+import matplotlib.pyplot as plt
+import seaborn as sns
+from tabulate import tabulate
 from sklearn.metrics.pairwise import cosine_similarity
-
+from collections import Counter
 from recommendation.repo.user_repo import UserRepo
 
+# Configure logging
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
 class RecommendationService:
     def __init__(self, user_repo: UserRepo):
         self.user_repo = user_repo
 
-    def get_recommendations(self, user_id: str, top_k: int = 10):
+    def get_recommendations(self, userId: str, top_k: int = 10):
+        # Fetch the user-item interaction matrix
         user_item_matrix = self.user_repo.fetch_user_product_matrix()
 
-        if user_item_matrix is None:
-            logging.warning("User-product matrix could not be created.")
+        if user_item_matrix is None or user_item_matrix.empty:
+            logging.warning("User-product matrix is empty or not found.")
             return []
 
-        if user_id not in user_item_matrix.index:
-            logging.warning(f"User {user_id} not found in the interaction matrix.")
+        # Print the matrix for debugging purposes
+        print("User-Item Interaction Matrix:")
+        print(user_item_matrix)
+
+        if userId not in user_item_matrix.index:
+            logging.warning(f"User {userId} not found in the interaction matrix.")
             return []
 
-        user_row = user_item_matrix.loc[user_id]
+        user_row = user_item_matrix.loc[userId].values.reshape(1, -1)
 
-        similarity_matrix = cosine_similarity(user_item_matrix, [user_row])
-        similarity_df = pd.DataFrame(similarity_matrix, index=user_item_matrix.index, columns=user_item_matrix.index)
+        # Compute similarity between the user and all other users
+        similarity_matrix = cosine_similarity(user_item_matrix, user_row)
+        similarity_df = pd.DataFrame(similarity_matrix, index=user_item_matrix.index, columns=['similarity'])
 
-        similar_users = similarity_df[user_id].sort_values(ascending=False).index[1:6]
+        # Get top 5 similar users (excluding the current user)
+        similar_users = similarity_df.sort_values(by='similarity', ascending=False).index[1:6]
+        logging.info(f"Top 5 similar users to {userId}: {similar_users.tolist()}")
 
         recommended_products = []
         for similar_user in similar_users:
-            similar_user_items = user_item_matrix.loc[similar_user][
-                user_item_matrix.loc[similar_user] > 0].index.tolist()
+            similar_user_items = user_item_matrix.loc[similar_user][user_item_matrix.loc[similar_user] > 0].index.tolist()
             recommended_products.extend(similar_user_items)
 
-        recommended_products = pd.Series(recommended_products).value_counts().index.tolist()
+        # Rank recommendations by frequency (most common first)
+        ranked_recommendations = [product for product, _ in Counter(recommended_products).most_common()]
 
-        user_clicked_products = user_item_matrix.loc[user_id][user_item_matrix.loc[user_id] > 0].index.tolist()
-        final_recommendations = [p for p in recommended_products if p not in user_clicked_products]
+        # Remove products the user has already interacted with
+        user_clicked_products = set(user_item_matrix.loc[userId][user_item_matrix.loc[userId] > 0].index.tolist())
+        final_recommendations = list(set(ranked_recommendations) - user_clicked_products)
 
-        logging.info(f"Final recommendations for User {user_id}: {final_recommendations}")
+        logging.info(f"Final recommendations for User {userId}: {final_recommendations[:top_k]}")
 
-        return final_recommendations
+        # Ensure recommendations do not exceed top_k and return the final list
+        return final_recommendations[:top_k]
 
     def plot_user_product_matrix(self):
         """Visualizes the user-product interaction matrix."""
-        user_product_matrix, _ = self.user_repo.fetch_user_product_matrix()
+        user_product_matrix = self.user_repo.fetch_user_product_matrix()
+
+        if user_product_matrix is None or user_product_matrix.empty:
+            print("No interactions found.")
+            return
+
         print("User-Product Matrix:")
         print(tabulate(user_product_matrix, headers='keys', tablefmt='psql'))
 
-        if user_product_matrix is None:
-            print("No interactions found.")
-            return
-
+        # Create the heatmap to visualize interactions
         plt.figure(figsize=(12, 6))
-        sns.heatmap(user_product_matrix, cmap="coolwarm", linewidths=0.5)
+        sns.heatmap(user_product_matrix, cmap="YlGnBu")
+        plt.title("User-Product Interaction Matrix")
         plt.xlabel("Products")
         plt.ylabel("Users")
-        plt.title("User-Product Interaction Matrix")
         plt.show()
-
-    def show_user_interactions(self):
-        """Print all user interactions in a tabulated format."""
-        _, df = self.user_repo.fetch_user_product_matrix()
-        if df is None:
-            print("No interactions found.")
-            return
-        print("\nUser Interactions:")
-        print(tabulate(df, headers='keys', tablefmt='psql'))
-
-    def evaluate_recommendations(self):
-        """Evaluate recommendations using accuracy score."""
-        user_product_matrix, df = self.user_repo.fetch_user_product_matrix()
-
-        if user_product_matrix is None:
-            print("No interactions found.")
-            return
-
-        actual = []
-        predicted = []
-        results = []
-
-        for user_id in user_product_matrix.index:
-            actual_products = df[df["userId"] == user_id]["productId"].tolist()
-            recommended_products = self.get_recommendations(user_id)
-
-            actual.append(set(actual_products))
-            predicted.append(set(recommended_products))
-
-            results.append([user_id, actual_products, recommended_products])
-
-        print("\nUser-wise Recommendations:")
-        print(tabulate(results, headers=["User ID", "Actual Products", "Recommended Products"], tablefmt='psql'))
-
-        accuracy = sum(len(act & pred) / max(len(act), 1) for act, pred in zip(actual, predicted)) / len(actual)
-
-        print(f"\nRecommendation Accuracy: {accuracy:.6f}")
-
